@@ -1,6 +1,14 @@
-export const pages = ['overview', 'inputs', 'run', 'results', 'review', 'delivery'];
+export const pages = ['overview', 'inputs', 'run', 'results', 'review', 'delivery', 'trace'];
 
 export function route() {
-  const [page, id, offset] = location.hash.slice(1).split('/');
-  return {page:pages.includes(page) ? page : 'overview', id:Number(id) || null, offset:Math.max(0, Number(offset) || 0)};
+  const [path, search] = location.hash.slice(1).split('?');
+  const [page, id, third, fourth] = path.split('/');
+  const numeric = /^\d+$/.test(third || '');
+  return {
+    page:pages.includes(page) ? page : 'overview',
+    id:Number(id) || null,
+    offset: numeric ? Number(third) : 0,
+    arg: (numeric ? fourth : third) ? decodeURIComponent(numeric ? fourth : third) : null,
+    query: Object.fromEntries(new URLSearchParams(search || '')),
+  };
 }

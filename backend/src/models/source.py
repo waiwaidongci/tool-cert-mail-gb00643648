@@ -14,5 +14,6 @@ class Dataset(Base):
     checksum: Mapped[str] = mapped_column(String(64))
     rows: Mapped[list] = mapped_column(JSON)
     row_count: Mapped[int]
+    kind: Mapped[str] = mapped_column(String(20), default='certificate', server_default='certificate')
     author: Mapped[str] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(default=now)

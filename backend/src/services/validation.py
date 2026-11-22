@@ -1,9 +1,9 @@
 import csv
 import io
 import math
-from datetime import date
-from src.domain import analysis
-from src.domain.spec import SPEC
+from datetime import date, datetime
+from src.domain import analysis, trace
+from src.domain.spec import KIND_CERTIFICATE, KIND_TRACE, SPEC, TRACE_FIELDS, TRACE_PARAMS
 
 
 def cell(field, raw):
@@ -12,7 +12,7 @@ def cell(field, raw):
     if value is None or value == '':
         if field.get('required', True):
             raise ValueError(f'{label}不能为空')
-        return None
+        return field.get('default')
     try:
         if kind == 'int':
             if isinstance(value, bool) or (isinstance(value, float) and not value.is_integer()):
@@ -26,6 +26,8 @@ def cell(field, raw):
                 raise ValueError
         elif kind == 'date':
             value = date.fromisoformat(str(value)).isoformat()
+        elif kind == 'datetime':
+            value = datetime.fromisoformat(str(value).strip().replace(' ', 'T')).isoformat(timespec='seconds')
         elif kind == 'bool':
             values = {'true': True, 'false': False, '1': True, '0': False, '是': True, '否': False}
             value = values[str(value).lower()]
@@ -44,9 +46,13 @@ def cell(field, raw):
     return value
 
 
-def parse_rows(text):
-    reader = csv.DictReader(io.StringIO(text.removeprefix('\ufeff'), newline=''), strict=True)
-    fields = SPEC['fields']
+def _fields(kind):
+    return TRACE_FIELDS if kind == KIND_TRACE else SPEC['fields']
+
+
+def parse_rows(text, kind=KIND_CERTIFICATE):
+    reader = csv.DictReader(io.StringIO(text.removeprefix('﻿'), newline=''), strict=True)
+    fields = _fields(kind)
     keys = {field['key'] for field in fields}
     required = {field['key'] for field in fields if field.get('required', True)}
     rows = []
@@ -67,13 +73,20 @@ def parse_rows(text):
         raise ValueError(f'CSV 第 {reader.line_num} 行附近格式不正确') from None
     if not rows:
         raise ValueError('CSV 至少需要一行有效数据')
-    if hasattr(analysis, 'validate_rows'):
+    if kind == KIND_TRACE:
+        trace.validate_rows(rows)
+    elif hasattr(analysis, 'validate_rows'):
         analysis.validate_rows(rows)
     return rows
 
 
-def normalize_params(params):
-    fields = SPEC['params']
+def normalize_rows(rows, kind=KIND_CERTIFICATE):
+    """与 CSV 导入同口径地补默认值、统一时间格式，供种子和历史批次使用。"""
+    return [{field['key']: cell(field, row.get(field['key'])) for field in _fields(kind)} for row in rows]
+
+
+def normalize_params(params, kind=KIND_CERTIFICATE):
+    fields = TRACE_PARAMS if kind == KIND_TRACE else SPEC['params']
     if set(params) - {field['key'] for field in fields}:
         raise ValueError('存在未知运行参数，请重新打开工作面板')
-    return {field['key']: cell(field, params.get(field['key'], field['default'])) for field in fields}
+    return {field['key']: cell(field, params.get(field['key'])) for field in fields}

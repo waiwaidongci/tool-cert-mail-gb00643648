@@ -14,9 +14,11 @@ function runRequest(data, spec) {
 }
 
 export async function runPage(route, refresh) {
-  const {spec,datasets,runs} = workspace;
+  const {spec,datasets:allDatasets,runs} = workspace;
+  const datasets = allDatasets.filter(item => (item.kind || 'certificate') === 'certificate');
   const scheduling = spec.scheduled;
-  const plans = scheduling ? await workspace.schedules() : [];
+  const plans = (scheduling ? await workspace.schedules() : [])
+    .filter(item => (item.kind || 'certificate') === 'certificate');
   const error = feedback();
   const submit = button(`执行${spec.run}`,{type:'submit',class:'primary','data-testid':'start-run'});
   const plan = button('保存定时计划',{type:'button',class:'primary','data-testid':'save-schedule'});
@@ -40,11 +42,12 @@ export async function runPage(route, refresh) {
     await workspace.schedule({...runRequest(data,spec),recipient,first_at:`${start}:00+08:00`,repeat_daily:data.has('repeat_daily')});
     await refresh();
   }));
+  const certificateRuns = runs.filter(item => (item.kind || 'certificate') === 'certificate');
   const runList = table([
     {label:'运行',render:item=>link(item.name,`#results/${item.id}`)},
     {label:'状态',render:item=>pill(STATUS[item.status],item.status)},
     {label:'时间',render:item=>date(item.created_at)},
-  ],runs,{caption:'运行记录',empty:'首次运行后将在此显示后台状态。'});
+  ],certificateRuns,{caption:'运行记录',empty:'首次运行后将在此显示后台状态。'});
   const scheduleList = scheduling && panel('定时计划',table([
     {key:'name',label:'计划'}, {key:'recipient',label:'收件团队'},
     {label:'下次执行（北京时间）',render:row=>row.enabled ? date(row.next_at) : '—'},

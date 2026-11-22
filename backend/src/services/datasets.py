@@ -4,8 +4,8 @@ import io
 import json
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
-from src.domain.demo import demo_rows
-from src.domain.spec import SPEC
+from src.domain.demo import demo_rows, demo_trace_rows
+from src.domain.spec import KIND_CERTIFICATE, KIND_TRACE, SPEC, TRACE_FIELDS
 from src.models.source import Dataset
 
 
@@ -14,14 +14,14 @@ def checksum(rows):
     return hashlib.sha256(raw.encode()).hexdigest()
 
 
-def save(db, name, filename, rows, actor):
+def save(db, name, filename, rows, actor, kind=KIND_CERTIFICATE):
     signature = checksum(rows)
     lookup = select(Dataset).where(Dataset.name == name, Dataset.checksum == signature)
     existing = db.scalar(lookup)
     if existing:
         return existing, False
     dataset = Dataset(name=name, filename=filename, checksum=signature, rows=rows,
-                      row_count=len(rows), author=actor)
+                      row_count=len(rows), kind=kind, author=actor)
     try:
         with db.begin_nested():
             db.add(dataset)
@@ -34,11 +34,18 @@ def save(db, name, filename, rows, actor):
     return dataset, True
 
 
-def template():
-    fields = [field['key'] for field in SPEC['fields']]
+def _render(fields, rows):
     buffer = io.StringIO(newline='')
-    writer = csv.DictWriter(buffer, fieldnames=fields, extrasaction='ignore')
+    writer = csv.DictWriter(buffer, fieldnames=[field['key'] for field in fields], extrasaction='ignore')
     writer.writeheader()
+    writer.writerows(rows)
+    return '﻿' + buffer.getvalue()
+
+
+def template():
     # The complete representative dataset also works as a reproducible import fixture.
-    writer.writerows(demo_rows())
-    return '\ufeff' + buffer.getvalue()
+    return _render(SPEC['fields'], demo_rows())
+
+
+def trace_template(version='baseline'):
+    return _render(TRACE_FIELDS, demo_trace_rows(version))

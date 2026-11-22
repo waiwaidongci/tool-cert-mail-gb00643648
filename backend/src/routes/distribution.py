@@ -27,14 +27,16 @@ def schedules(db: Session = Depends(connection), actor: User = Depends(current))
 def add(body: ScheduleRequest, db: Session = Depends(connection), actor: User = Depends(allow(Role.ADMIN))):
     if not db.get(Dataset, body.dataset_id):
         raise HTTPException(404, '找不到指定的数据批次')
+    kind = db.get(Dataset, body.dataset_id).kind
     if body.first_at.utcoffset() is None:
         raise ValueError('首次运行时间需要明确时区')
     first = body.first_at.astimezone(UTC).replace(tzinfo=None)
     stamp = now()
     if first < stamp - timedelta(seconds=30) or first > stamp + timedelta(days=366):
         raise ValueError('请选择从现在起一年内的首次运行时间')
-    item = Schedule(dataset_id=body.dataset_id, params=normalize_params(body.params), name=body.name,
-                    recipient=body.recipient, next_at=first, repeat_daily=body.repeat_daily, author=actor.username)
+    item = Schedule(dataset_id=body.dataset_id, kind=kind, params=normalize_params(body.params, kind),
+                    name=body.name, recipient=body.recipient, next_at=first,
+                    repeat_daily=body.repeat_daily, author=actor.username)
     db.add(item)
     db.flush()
     record(db, actor.username, 'schedule.created', item.id, recipient=item.recipient)

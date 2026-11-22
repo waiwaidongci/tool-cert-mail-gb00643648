@@ -10,9 +10,14 @@ import {date, value} from '../utils/format.js';
 
 export async function results(route, refresh) {
   const {spec,runs,datasets} = workspace;
-  const id = route.id || runs[0]?.id;
+  const certificateRuns = runs.filter(item => item.kind !== 'trace');
+  const id = route.id || certificateRuns[0]?.id;
   if (!id) return panel(spec.pages[3],empty('还没有可查看的运行结果。','#run','前往运行'));
   const job = await workspace.getRun(id);
+  if (job.kind === 'trace') {
+    return panel(job.name, p('这是超差追溯运行，请到追溯页面查看批次去向与依据。'),
+      link('打开超差追溯', `#trace/${job.id}`, {class:'primary'}));
+  }
   const source = datasets.find(item => item.id === job.dataset_id);
   const message = feedback();
   const finished = item => item.status === 'complete' || item.status === 'failed';
@@ -29,7 +34,8 @@ export async function results(route, refresh) {
     handler(download,message,()=>workspace.download(`/runs/${job.id}/export`,`${spec.short_name}-${job.id}.csv`))(event)});
   const history = el('label',{class:'field run-picker',for:'run-picker'},el('span',{},'切换运行记录'),
     el('select',{id:'run-picker',onChange:event=>{location.hash=`#results/${event.target.value}`;}},
-      (runs.some(item=>item.id===job.id) ? runs : [job,...runs]).map(item=>el('option',{value:item.id,selected:item.id===job.id},item.name))));
+      (certificateRuns.some(item=>item.id===job.id) ? certificateRuns : [job,...certificateRuns])
+        .map(item=>el('option',{value:item.id,selected:item.id===job.id},item.name))));
   const result = job.result;
   const analysis = result ? el('section',{class:'analysis','data-testid':'analysis-complete'},
     el('div',{class:'result-head'},p(job.name,'eyeline'),h(2,result.headline),p(result.note,'intro-copy'),
